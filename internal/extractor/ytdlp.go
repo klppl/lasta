@@ -142,12 +142,11 @@ func BestFormats(info *YtDlpJSON) []Format {
 	var progressive, videoOnly []YtDlpFormat
 	for _, f := range info.Formats {
 		// vcodec "none" is explicitly audio-only; null/"" means unknown
-		// (e.g. Twitter's direct mp4s), which we keep.
-		if f.URL == "" || f.VCodec == "none" {
-			continue
-		}
-		// m3u8/dash manifest URLs are not directly downloadable by a browser.
-		if strings.Contains(f.Protocol, "m3u8") || strings.Contains(f.Protocol, "dash") {
+		// (e.g. Twitter's direct mp4s), which we keep. Storyboards are
+		// mhtml. Manifest URLs (m3u8/dash) are fine: downloads run through
+		// the server via yt-dlp, which handles them — only the quality
+		// labels come from this list.
+		if f.URL == "" || f.VCodec == "none" || f.Ext == "mhtml" {
 			continue
 		}
 		// acodec "none" is explicitly silent; unknown counts as having audio.

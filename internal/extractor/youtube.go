@@ -12,9 +12,12 @@ func (YouTube) Accepts(rawURL string) bool {
 }
 
 func (YouTube) Extract(ctx context.Context, rawURL string) (*VideoInfo, error) {
-	// Prefer progressive mp4 so the browser can download a single file;
-	// fall back to best available.
-	info, err := ExtractJSON(ctx, rawURL, "-f", "best[ext=mp4]/best")
+	// No -f selector here: "best" means a combined video+audio file, which
+	// YouTube no longer offers for many videos (especially on logged-in
+	// sessions), and a non-matching selector makes yt-dlp abort instead of
+	// listing formats. We only need the formats array; the actual download
+	// runs through DownloadMerged with its own fallback chain.
+	info, err := ExtractJSON(ctx, rawURL)
 	if err != nil {
 		return nil, err
 	}
