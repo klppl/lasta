@@ -1,0 +1,23 @@
+<div id="cookie-sites">
+  {{range .Sites}}
+  <div class="cookie-site">
+    <div class="cookie-site-head">
+      <strong>{{.Label}}</strong>
+      <span class="cookie-site-status">
+        {{if .Set}}<span class="ok">●</span> {{.Count}} cookies · saved {{.Saved}}{{else}}<span class="muted">not set</span>{{end}}
+      </span>
+    </div>
+    {{if .Msg}}<div class="cookie-msg {{if .IsErr}}bad{{else}}ok{{end}}">{{.Msg}}</div>{{end}}
+    <form hx-post="/cookies" hx-target="#cookie-sites" hx-swap="outerHTML">
+      <input type="hidden" name="site" value="{{.Key}}">
+      <div class="cookie-site-row">
+        <textarea name="cookies" rows="1" spellcheck="false"
+                  placeholder="Paste {{.Label}} cookies.txt content…"></textarea>
+        <button type="submit">Save</button>
+        {{if .Set}}<button type="submit" name="clear" value="1" class="secondary"
+                hx-confirm="Remove the saved {{.Label}} cookies?">Clear</button>{{end}}
+      </div>
+    </form>
+  </div>
+  {{end}}
+</div>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lasta</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" crossorigin="anonymous"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Lasta</h1>
+      <p class="tagline">Paste a video link, get download links. YouTube · Instagram · Twitter/X · Threads</p>
+    </header>
+
+    <form hx-post="/extract"
+          hx-target="#results"
+          hx-swap="innerHTML"
+          hx-indicator="#spinner"
+          {{if .PrefillURL}}hx-trigger="submit, load"{{end}}>
+      <input type="url" name="url" placeholder="https://www.youtube.com/watch?v=…"
+             value="{{.PrefillURL}}"
+             required autofocus autocomplete="off" spellcheck="false">
+      <button type="submit">Extract</button>
+    </form>
+
+    <div id="spinner" class="spinner" aria-hidden="true">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+
+    <div id="results"></div>
+
+    <details class="settings">
+      <summary>Cookies — for stories, private &amp; age-restricted videos</summary>
+      {{template "cookies.html" .Cookies}}
+      <p class="hint">Log in to a site in your browser, export its cookies with a
+        &quot;Get cookies.txt&quot; extension, and paste them into that site's slot (a full
+        all-sites export works too — each slot keeps only its own site's cookies). Re-paste any
+        time to refresh an expired login. Cookies are your login session — they stay on this
+        server (<code>{{.CookiesPath}}</code>, never shown again after saving) and are only sent
+        to the video sites during extraction.</p>
+    </details>
+  </main>
+</body>
+</html>

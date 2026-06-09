@@ -1,0 +1,23 @@
+{{if .Error}}
+<div class="error" role="alert">{{.Error}}</div>
+{{else}}
+<article class="result">
+  {{if .Info.Thumb}}
+  <img class="thumb" src="{{.Info.Thumb}}" alt="" loading="lazy" referrerpolicy="no-referrer">
+  {{end}}
+  <div class="meta">
+    <h2>{{.Info.Title}}</h2>
+    <p class="sub">{{.Site}}{{if .Info.Duration}} · {{.Info.Duration}}{{end}}</p>
+    <div class="formats">
+      {{range .Info.Formats}}
+      <a class="format" href="{{.URL}}" target="_blank" rel="noopener noreferrer" download>
+        <span class="quality">{{.Quality}}</span>
+        <span class="type">{{.MimeType}}</span>
+        {{if .SizeHint}}<span class="size">{{.SizeHint}}</span>{{end}}
+      </a>
+      {{end}}
+    </div>
+    <p class="prepare-note">Downloads are prepared on the server — large videos can take a little while to start.</p>
+  </div>
+</article>
+{{end}}
