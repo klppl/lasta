@@ -1,91 +1,71 @@
 # Lasta
 
-Self-hosted video downloader. Paste a link from YouTube, Instagram, Twitter/X, or Threads and download the video in the best available quality (1080p/720p where offered).
+Self-hosted video downloader for **YouTube, Instagram, Twitter/X, and Threads**. Paste a link, get the video — 1080p/720p with audio where available, best quality otherwise.
 
-All downloads go through the server: it fetches the video to a temp file — via yt-dlp (merging YouTube's separate video and audio streams with ffmpeg when needed) or natively for Threads — then streams the finished mp4 to your browser and deletes the temp file. This is deliberate: many CDN URLs (especially YouTube's) are locked to the IP that extracted them, so direct links would break the moment Lasta runs on a VPS instead of your own machine.
+All downloads go through the server: it fetches the video (yt-dlp + ffmpeg merge for YouTube's split streams, native fetch for Threads), then streams the finished mp4 to your browser. No CDN links are handed out — they're often IP-locked and would break on a VPS.
 
-Built in Go around [yt-dlp](https://github.com/yt-dlp/yt-dlp), with a plugin-style extractor architecture so new sites are a single small file.
+![Lasta screenshot](screenshot.png)
 
-## Prerequisites
+## Run
 
-- Go 1.22+
-- `yt-dlp` on your `PATH` (or point `YTDLP_PATH` at the binary). Keep it current — YouTube rotates its URL signing and stale yt-dlp versions produce links that 403.
-- `ffmpeg` on your `PATH`, used to merge video and audio for high-resolution YouTube downloads
+### Docker (recommended)
 
-## Running locally
-
-```sh
-go run ./cmd/lasta
-# open http://localhost:8080
-```
-
-The binary is fully self-contained (templates and CSS are embedded), so you can also:
-
-```sh
-go build -o lasta ./cmd/lasta
-./lasta
-```
-
-### Configuration
-
-| Env var | Default | Meaning |
-|---|---|---|
-| `PORT` | `8080` | HTTP listen port |
-| `YTDLP_PATH` | `yt-dlp` | yt-dlp binary, resolved via `PATH` |
-| `YTDLP_COOKIES` | `<user-config-dir>/lasta/cookies.txt` | Where the cookies file is stored. Usually you don't set this — manage cookies from the web UI instead (see below) |
-| `REQUEST_TIMEOUT_SECONDS` | `30` | Per-extraction timeout |
-| `DOWNLOAD_TIMEOUT_SECONDS` | `600` | Timeout for server-merged downloads |
-| `MAX_CONCURRENT_EXTRACTIONS` | `5` | Cap on simultaneous yt-dlp subprocesses |
-
-### Cookies (stories, private & age-restricted videos)
-
-Some content needs a logged-in session: Instagram stories, private accounts, age-restricted videos, login-walled Threads posts. The **Cookies** section at the bottom of the page has one slot per site (YouTube, Instagram, Twitter/X, Threads), each showing whether cookies are saved, how many, and when. Paste the contents of a Netscape-format `cookies.txt` into a site's slot (export from your browser with a "Get cookies.txt" extension); re-paste any time to refresh an expired login, or clear one site without touching the others. Pasted content is filtered to the slot's domains, so an all-sites export pasted into a slot keeps only that site's cookies — and pasting into the wrong slot fails with a clear message.
-
-Slots are stored server-side with `0600` permissions (one file per site plus a merged `cookies.txt` that yt-dlp consumes), never rendered back to the browser, and sent by the native Threads extractor for `threads.com`/`threads.net`. If saved Threads cookies are expired or invalid, public posts still work — the extractor retries anonymously. Treat them as your login session: meant for personal, self-hosted use.
-
-### Docker
+The image bundles everything — yt-dlp, ffmpeg, the app. Nothing to install on the host.
 
 ```sh
 docker build -t lasta .
-docker run -p 8080:8080 lasta
+docker run -d -p 8080:8080 -v lasta-data:/data --name lasta lasta
 ```
 
-## API
+The `/data` volume persists saved cookies. A manual GitHub Actions workflow (`.github/workflows/docker.yml`) builds and pushes the image to ghcr.io. Rebuild the image now and then — it pins the yt-dlp release at build time, and stale yt-dlp versions stop working on YouTube.
 
-`POST /extract` with form field `url`. Returns the HTML results partial by default (HTMX-friendly), or JSON when the request has `Accept: application/json`:
+### From source
+
+Needs Go 1.22+, plus a **current** `yt-dlp` and `ffmpeg` on `PATH`:
 
 ```sh
-curl -s -X POST -H 'Accept: application/json' \
-  -d 'url=https://www.youtube.com/watch?v=dQw4w9WgXcQ' \
-  http://localhost:8080/extract
+go run ./cmd/lasta    # http://localhost:8080
 ```
 
-Format URLs in the response are server-relative `/download` paths (`/download?u=<video-url>&h=<max-height>`); `GET` one to receive the file. `GET /health` returns `200 OK`.
+## Configuration
 
-**Deep links**: append a video URL straight after the base URL and extraction starts immediately on page load — with or without the scheme:
+| Env var | Default | |
+|---|---|---|
+| `PORT` | `8080` | HTTP port |
+| `YTDLP_PATH` | `yt-dlp` | yt-dlp binary |
+| `YTDLP_COOKIES` | `<config-dir>/lasta/cookies.txt` | cookie storage location |
+| `REQUEST_TIMEOUT_SECONDS` | `30` | per-extraction timeout |
+| `DOWNLOAD_TIMEOUT_SECONDS` | `600` | per-download timeout |
+| `MAX_CONCURRENT_EXTRACTIONS` | `5` | max simultaneous yt-dlp/download jobs |
 
-```
-http://localhost:8080/threads.com/@user/post/XXXX
-http://localhost:8080/www.youtube.com/watch?v=YYYY
-http://localhost:8080/https://x.com/user/status/123
-```
+## Usage
 
-## Adding a new extractor
+- **Web UI** — paste a URL, click Extract, pick a quality.
+- **Deep links** — append the video URL to the base URL and extraction starts on load:
+  `http://localhost:8080/threads.com/@user/post/XXXX` (scheme optional).
+- **API** — `POST /extract` with form field `url` and `Accept: application/json` returns metadata and `/download?u=…&h=…` paths; `GET` one to receive the file. `GET /health` → `200 OK`.
 
-1. **Create `internal/extractor/<site>.go`** with a type implementing the `Extractor` interface (`internal/extractor/extractor.go`): `Name()`, `Accepts(rawURL)` (use the `hostMatches` helper to match domains), and `Extract(ctx, rawURL)`.
-2. **Call the shared yt-dlp helpers** — `ExtractJSON(ctx, rawURL, extraArgs...)` runs yt-dlp with any site-specific flags, and `BestFormats(info)` picks and sorts the downloadable formats. Wrap failures in the typed errors (`ErrPrivate`, `ErrNotFound`, `ErrExtractorFailed`); `RunYtDlp` already classifies common yt-dlp stderr patterns for you.
-3. **Register it** by appending the type to the `Registry` slice in `internal/extractor/registry.go`. The handler picks the first extractor whose `Accepts()` matches — no other code changes needed.
+### Cookies (stories, private & age-restricted videos)
+
+The Cookies section at the bottom of the page has one slot per site, showing what's saved and when. Export cookies from a logged-in browser ("Get cookies.txt" extension) and paste into the site's slot — re-paste to refresh an expired login, clear per site. Pasted content is filtered to that site's domains, so wrong-slot pastes fail loudly. Cookies are stored server-side (0600), never displayed again, and only sent to the video sites.
+
+> Lasta has no built-in auth. On a public VPS, put it behind a reverse proxy with basic auth or a VPN — anyone with access can use your bandwidth and your saved cookies.
+
+## Adding a site
+
+1. Create `internal/extractor/<site>.go` implementing `Extractor` (`Name`, `Accepts` — use `hostMatches` — and `Extract`). If yt-dlp supports the site, `ExtractJSON` + `BestFormats` do the heavy lifting; wrap failures in the typed errors (`ErrPrivate`, `ErrNotFound`, …).
+2. Optionally implement `Downloader` if the site needs native fetching (see `threads.go`).
+3. Append it to `Registry` in `internal/extractor/registry.go`. Done.
 
 ## Layout
 
 ```
-cmd/lasta/main.go        entry point, wiring
-assets.go                go:embed of templates/ and static/
+cmd/lasta/           entry point
+assets.go            go:embed of templates/ + static/
 internal/
-  config/                env-var configuration
-  extractor/             interface, registry, yt-dlp helper, one file per site
-  handler/               HTTP handlers + chi routes
-  server/                http.Server with graceful shutdown
-templates/               index page + results partial (html/template)
-static/                  stylesheet
+  config/            env vars
+  extractor/         interface, registry, yt-dlp helpers, cookies, one file per site
+  handler/           HTTP handlers + chi routes
+  server/            graceful shutdown
+templates/ static/   HTMX UI (dark, single page)
 ```
