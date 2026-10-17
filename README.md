@@ -1,5 +1,7 @@
 # Lasta
 
+[![License: Lagom](https://img.shields.io/badge/license-lagom-9E2B25)](https://klppl.github.io/lagom-license/)
+
 Self-hosted video downloader for **YouTube, Instagram, Twitter/X, and Threads**. Paste a link, get the video — 1080p/720p with audio where available, best quality otherwise.
 
 All downloads go through the server: it fetches the video (yt-dlp + ffmpeg merge for YouTube's split streams, native fetch for Threads), then streams the finished mp4 to your browser. No CDN links are handed out — they're often IP-locked and would break on a VPS.
